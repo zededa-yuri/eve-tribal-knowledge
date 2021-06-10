@@ -10,7 +10,7 @@ Example
 
 First, let's connect the necessary kernel modules:
 
-.. code-block:: console
+.. code-block:: bash
 
    modprobe target_core_mod
    modprobe target_core_file
@@ -28,15 +28,19 @@ Start FILEIO subsystem plugin objects:
    Each image requires a new directory to be created fileio_0. Example: fileio_0 fileio_1 fileio_2 for 3 image or file.
 
 
-.. code-block:: console
+.. code-block:: bash
 
-   mkdir -p /sys/kernel/config/target/core/fileio_0/fileio
+   sudo mkdir -p /sys/kernel/config/target/core/fileio_0/fileio
 
 Create fileio device:
 
-.. code-block:: console
+.. code-block:: bash
 
-   echo "fd_dev_name=<Device>,fd_dev_size=<Device size in byte>,fd_buffered_io=1" > /sys/kernel/config/target/core/fileio_0/fileio/control
+   fallocate  test.img -l 1G
+   size_bytes="$(stat --printf="%s" test.img)"
+   fpath="$(readlink -f test.img)"
+   echo "fd_dev_name="${fpath}",fd_dev_size="${size_bytes}",fd_buffered_io=1" | \
+       sudo tee /sys/kernel/config/target/core/fileio_0/fileio/control
 
 Params:
 
@@ -48,32 +52,29 @@ Params:
 
 Set block_size:
 
-.. code-block:: console
+.. code-block:: bash
 
-   echo 4096 > /sys/kernel/config/target/core/fileio_0/fileio/attrib/block_size
+   echo 4096 | sudo tee /sys/kernel/config/target/core/fileio_0/fileio/attrib/block_size
 
-Set T10 WWN Unit Serial number:
+Generate and set T10 WWN Unit Serial number:
 
-..
+.. code-block:: bash
 
-   We need to generate this wwn first
+   serial="$(od -An -N8 -t x8 < /dev/urandom | xargs)"
+   echo "${serial}" | sudo tee /sys/kernel/config/target/core/fileio_0/fileio/wwn/vpd_unit_serial
 
-
-.. code-block:: console
-
-   echo "<T10 WWN Unit Serial>" > /sys/kernel/config/target/core/fileio_0/fileio/wwn/vpd_unit_serial
 
 Set udev_path:
 
-.. code-block:: console
+.. code-block:: bash
 
-   echo -n '<Device>' >/sys/kernel/config/target/core/fileio_0/fileio/udev_path
+   echo -n "test_fio" | sudo tee /sys/kernel/config/target/core/fileio_0/fileio/udev_path
 
 Enable fileio device:
 
-.. code-block:: console
+.. code-block:: bash
 
-   echo 1 > /sys/kernel/config/target/core/fileio_0/fileio/enable
+   echo 1 | sudo tee /sys/kernel/config/target/core/fileio_0/fileio/enable
 
 Create vHost fabric
 ^^^^^^^^^^^^^^^^^^^
@@ -92,9 +93,9 @@ Create vHost fabric
 
 **Created target and tpgt:**
 
-.. code-block:: console
+.. code-block:: bash
 
-   mkdir -p /sys/kernel/config/target/vhost/<nna.1111111111111111>/tpgt_1/lun/lun_0
+   sudo mkdir -p /sys/kernel/config/target/vhost/naa."${serial}"/tpgt_1/lun/lun_0
 
 ..
 
@@ -103,28 +104,30 @@ Create vHost fabric
 
 **Set (SCSI %d:%d:%d:%d) is in h:c:t:l format:**
 
-.. code-block:: console
+.. code-block:: bash
 
-   echo -n 'scsi_host_id=1,scsi_channel_id=0,scsi_target_id=0,scsi_lun_id=0' > /sys/kernel/config/target/core/fileio_0/fileio/control
+   echo -n 'scsi_host_id=1,scsi_channel_id=0,scsi_target_id=0,scsi_lun_id=0' | \
+       sudo tee /sys/kernel/config/target/core/fileio_0/fileio/control
 
 **Enable device (if not enabled):**
 
-.. code-block:: console
+.. code-block:: bash
 
-   echo -n 1 > /sys/kernel/config/target/core/fileio_0/fileio/enable
+   echo -n 1 | sudo tee /sys/kernel/config/target/core/fileio_0/fileio/enable
 
 **Set nexus:**
 
-.. code-block:: console
+.. code-block:: bash
 
-   echo -n <nna.222222222222222> > /sys/kernel/config/target/vhost/<nna.1111111111111111>/tpgt_1/nexus
+   serial_nexus="$(od -An -N8 -t x8 < /dev/urandom | xargs)"
+   echo -n "naa.${serial_nexus}"  | sudo tee /sys/kernel/config/target/vhost/naa."${serial}"/tpgt_1/nexus
 
 **Create a link between LUN and vhost:**
 
-.. code-block:: console
+.. code-block:: bash
 
-   cd /sys/kernel/config/target/vhost/<nna.1111111111111111>/tpgt_1/lun/lun_0
-   ln -s ../../../../../core/fileio_0/fileio/ .
+   cd /sys/kernel/config/target/vhost/naa."${serial}"/tpgt_1/lun/lun_0
+   sudo ln -s ../../../../../core/fileio_0/fileio/ .
 
 QEMU
 ^^^^
@@ -135,7 +138,7 @@ Add parameter for QEMU:
 
 .. code-block:: console
 
-   -device vhost-scsi-pci,wwpn=<nna.1111111111111111>,bus=pci.0,addr=0x5
+   -device vhost-scsi-pci,wwpn=naa."${serial}",bus=pci.0,addr=0x5
 
 Tree /sys/kernel/config/target/ (for example)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
