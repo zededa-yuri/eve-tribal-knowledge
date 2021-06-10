@@ -60,7 +60,10 @@ Generate and set T10 WWN Unit Serial number:
 
 .. code-block:: bash
 
+   #Generate random serial
    serial="$(od -An -N8 -t x8 < /dev/urandom | xargs)"
+   #or use hardcoded
+   serial=000000000000000a
    echo "${serial}" | sudo tee /sys/kernel/config/target/core/fileio_0/fileio/wwn/vpd_unit_serial
 
 
@@ -119,7 +122,10 @@ Create vHost fabric
 
 .. code-block:: bash
 
-   serial_nexus="$(od -An -N8 -t x8 < /dev/urandom | xargs)"
+   # nexus_serial is serial+1 (could be random as well)
+   serial_nexus=$(printf '%x' $(( 16#$serial + 1 )))
+   # or use hardcoded serial
+   serial_nexus=000000000000000b
    echo -n "naa.${serial_nexus}"  | sudo tee /sys/kernel/config/target/vhost/naa."${serial}"/tpgt_1/nexus
 
 **Create a link between LUN and vhost:**
